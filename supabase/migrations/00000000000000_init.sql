@@ -1,0 +1,3 @@
+-- 00000000000000_init.sql
+-- Victor Noctis Initial Migration Placeholder
+-- Full schema to be provisioned in Prompt 2
