@@ -3,13 +3,120 @@
 @tailwind utilities;
 
 :root {
-  --background: #090a0f;
-  --foreground: #e2e8f0;
+  --vic-black: #0a0a0f;
+  --vic-dark: #111118;
+  --vic-surface: #1a1a24;
+  --vic-border: #2a2a3a;
+  --vic-accent: #38bdf8;      /* cyan - listening/speaking */
+  --vic-purple: #a855f7;      /* purple - thinking */
+  --vic-green: #10b981;       /* emerald - success */
+  --vic-red: #ef4444;         /* red - error */
+  --vic-gold: #f59e0b;        /* gold - important */
+  --vic-text: #e2e8f0;
+  --vic-muted: #64748b;
+  --background: var(--vic-black);
+  --foreground: var(--vic-text);
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--vic-text);
+  background: var(--vic-black);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbars for HUD aesthetics */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--vic-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vic-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vic-muted);
+}
+
+/* Wolf avatar and HUD glow animations */
+@keyframes vic-pulse-cyan {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.25), inset 0 0 8px rgba(56, 189, 248, 0.2);
+    border-color: rgba(56, 189, 248, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(56, 189, 248, 0.6), inset 0 0 16px rgba(56, 189, 248, 0.4);
+    border-color: rgba(56, 189, 248, 1);
+  }
+}
+
+@keyframes vic-pulse-purple {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.3), inset 0 0 8px rgba(168, 85, 247, 0.2);
+    border-color: rgba(168, 85, 247, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(168, 85, 247, 0.7), inset 0 0 18px rgba(168, 85, 247, 0.5);
+    border-color: rgba(168, 85, 247, 1);
+  }
+}
+
+@keyframes vic-pulse-green {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+    border-color: rgba(16, 185, 129, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.75);
+    border-color: rgba(16, 185, 129, 1);
+  }
+}
+
+@keyframes vic-pulse-red {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+    border-color: rgba(239, 68, 68, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(239, 68, 68, 0.8);
+    border-color: rgba(239, 68, 68, 1);
+  }
+}
+
+@keyframes vic-breathe-idle {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(100, 116, 139, 0.2);
+    border-color: rgba(42, 42, 58, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(100, 116, 139, 0.4);
+    border-color: rgba(100, 116, 139, 0.6);
+  }
+}
+
+.wolf-ring-listening {
+  animation: vic-pulse-cyan 2s infinite ease-in-out;
+}
+
+.wolf-ring-thinking {
+  animation: vic-pulse-purple 1.5s infinite ease-in-out;
+}
+
+.wolf-ring-success {
+  animation: vic-pulse-green 1.2s ease-in-out;
+}
+
+.wolf-ring-error {
+  animation: vic-pulse-red 1.2s ease-in-out;
+}
+
+.wolf-ring-idle {
+  animation: vic-breathe-idle 4s infinite ease-in-out;
 }

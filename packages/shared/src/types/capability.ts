@@ -31,6 +31,7 @@ export interface CapabilityDefinition {
   authorityLevel: AuthorityLevel;
   target: ExecutionTarget;
   status: CapabilityStatus;
+  category?: string;
   parameters?: CapabilityParameter[];
   parametersSchema?: Record<string, unknown>;
   returnsSchema?: Record<string, unknown>;
@@ -39,4 +40,20 @@ export interface CapabilityDefinition {
   tags?: string[];
   timeoutMs?: number;
   isIdempotent?: boolean;
+}
+
+export interface OperationRequest {
+  capabilityId: string;
+  params?: Record<string, unknown>;
+  ownerId: string;
+  deviceId?: string;
+  context?: Record<string, unknown>;
+}
+
+export interface AuthorizationResult {
+  authorized: boolean;
+  level: AuthorityLevel;
+  requiresApproval: boolean;
+  reason: string;
+  approvalToken?: string;
 }

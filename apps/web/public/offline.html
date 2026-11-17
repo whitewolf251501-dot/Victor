@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Victor Noctis — Offline</title>
+  <style>
+    body {
+      background-color: #0B0D13;
+      color: #F8FAFC;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      text-align: center;
+    }
+    .hud-box {
+      border: 1px solid #1E2638;
+      background: #111520;
+      padding: 32px;
+      border-radius: 12px;
+      max-width: 400px;
+    }
+    .status {
+      color: #00E5FF;
+      font-size: 14px;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+    .message {
+      color: #94A3B8;
+      font-size: 12px;
+      margin-top: 12px;
+    }
+    .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background-color: #00E5FF;
+      border-radius: 50%;
+      margin-right: 8px;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="hud-box">
+    <div class="status"><span class="dot"></span>SYSTEM 07 • DISCONNECTED</div>
+    <div class="message">Victor is offline. Reconnecting to local gateway...</div>
+  </div>
+</body>
+</html>

@@ -21,6 +21,31 @@ export type MemoryCategory =
 
 export type MemoryImportance = 'low' | 'medium' | 'high' | 'critical';
 
+export const MEMORY_CATEGORIES: readonly MemoryCategory[] = [
+  'fact',
+  'goal',
+  'dream',
+  'project',
+  'venture',
+  'decision',
+  'preference',
+  'problem',
+  'open_loop',
+  'pattern',
+  'lesson',
+  'relationship',
+  'discovery',
+  'commitment',
+  'instruction',
+] as const;
+
+export const MEMORY_IMPORTANCES: readonly MemoryImportance[] = [
+  'low',
+  'medium',
+  'high',
+  'critical',
+] as const;
+
 export interface Memory {
   id: MemoryId;
   ownerId: OwnerId;

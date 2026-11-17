@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#0B0D13" />
+  <circle cx="256" cy="256" r="180" fill="#111520" stroke="#00E5FF" stroke-width="8" stroke-opacity="0.8"/>
+  <g fill="#00E5FF">
+    <!-- Left ear -->
+    <polygon points="148,210 84,84 200,148" opacity="0.9"/>
+    <!-- Right ear -->
+    <polygon points="364,210 428,84 312,148" opacity="0.9"/>
+    <!-- Brow -->
+    <polygon points="200,148 256,96 312,148 256,224" opacity="0.85"/>
+    <!-- Cheeks -->
+    <polygon points="148,210 200,148 256,224 214,340 106,290" opacity="0.95"/>
+    <polygon points="364,210 312,148 256,224 298,340 406,290" opacity="0.95"/>
+    <!-- Muzzle -->
+    <polygon points="256,224 214,340 256,420 298,340"/>
+    <!-- Eyes -->
+    <polygon points="186,244 234,254 202,270" fill="#FFFFFF"/>
+    <polygon points="326,244 278,254 310,270" fill="#FFFFFF"/>
+  </g>
+</svg>

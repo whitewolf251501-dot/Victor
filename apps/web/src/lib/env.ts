@@ -23,6 +23,7 @@ export interface ValidatedEnv {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
   GEMINI_API_KEY?: string;
+  BRAVE_SEARCH_API_KEY?: string;
 }
 
 export function validateEnv(): ValidatedEnv {
@@ -55,5 +56,6 @@ export function validateEnv(): ValidatedEnv {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    BRAVE_SEARCH_API_KEY: process.env.BRAVE_SEARCH_API_KEY,
   };
 }

@@ -10,8 +10,21 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#090a0f',
-        foreground: '#e2e8f0',
+        background: 'var(--vic-black)',
+        foreground: 'var(--vic-text)',
+        vic: {
+          black: 'var(--vic-black)',
+          dark: 'var(--vic-dark)',
+          surface: 'var(--vic-surface)',
+          border: 'var(--vic-border)',
+          accent: 'var(--vic-accent)',
+          purple: 'var(--vic-purple)',
+          green: 'var(--vic-green)',
+          red: 'var(--vic-red)',
+          gold: 'var(--vic-gold)',
+          text: 'var(--vic-text)',
+          muted: 'var(--vic-muted)',
+        },
         hud: {
           dark: '#0d1117',
           border: '#1f293d',
@@ -22,6 +35,7 @@ const config: Config = {
         },
       },
       fontFamily: {
+        sans: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
       },
     },
