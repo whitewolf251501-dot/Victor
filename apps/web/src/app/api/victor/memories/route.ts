@@ -4,15 +4,20 @@ import { MemoryManager } from '@victor/core';
 import {
   type MemoryCategory,
   type MemoryImportance,
+  type MemoryProvenance,
   MEMORY_CATEGORIES,
   MEMORY_IMPORTANCES,
+  MEMORY_PROVENANCES,
 } from '@victor/shared';
 
 export interface CreateMemoryBody {
   content?: string;
   category?: MemoryCategory;
   importance?: MemoryImportance;
+  provenance?: MemoryProvenance;
+  confidence?: number;
   source?: string;
+  sourceRef?: string;
 }
 
 /**
@@ -36,14 +41,27 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
+    const exportParam = searchParams.get('export');
+
+    const memoryManager = new MemoryManager(supabase, user.id);
+
+    if (exportParam === 'json' || exportParam === 'jsonl') {
+      const exported = await memoryManager.exportMemories(exportParam);
+      return new NextResponse(exported, {
+        status: 200,
+        headers: {
+          'Content-Type': exportParam === 'json' ? 'application/json' : 'application/x-ndjson',
+          'Content-Disposition': `attachment; filename="victor-memories.${exportParam}"`,
+        },
+      });
+    }
+
     const categoryParam = searchParams.get('category');
     const importanceParam = searchParams.get('importance');
     const searchParam = searchParams.get('search');
     const limitParam = searchParams.get('limit');
 
     const limit = limitParam ? Math.min(Math.max(1, parseInt(limitParam, 10) || 50), 100) : 50;
-
-    const memoryManager = new MemoryManager(supabase, user.id);
 
     let memories = searchParam
       ? await memoryManager.retrieve(searchParam, {
@@ -121,7 +139,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { content, category, importance, source } = body;
+    const { content, category, importance, source, provenance, confidence, sourceRef } = body;
 
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
       return NextResponse.json(
@@ -152,12 +170,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (provenance && !MEMORY_PROVENANCES.includes(provenance)) {
+      return NextResponse.json(
+        {
+          error: `Validation failed: Invalid provenance '${provenance}'. Allowed values: ${MEMORY_PROVENANCES.join(
+            ', '
+          )}`,
+        },
+        { status: 400 }
+      );
+    }
+
     const memoryManager = new MemoryManager(supabase, user.id);
     const createdMemory = await memoryManager.save(
       content,
       category,
       importance ?? 'medium',
-      source ?? 'user'
+      {
+        source: source ?? 'user',
+        provenance: provenance ?? 'user_stated',
+        confidence: confidence ?? 1.0,
+        sourceRef,
+      }
     );
 
     return NextResponse.json({ memory: createdMemory }, { status: 201 });

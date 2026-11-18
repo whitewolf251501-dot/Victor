@@ -1,15 +1,6 @@
-## This file must *NOT* be checked into Version Control Systems,
-# as it contains information specific to your local configuration.
-#
-# Location of the SDK. This is only used by Gradle.
-# For Windows: sdk.dir=C\:\\Users\\<USER>\\AppData\\Local\\Android\\Sdk
-# For macOS: sdk.dir=/Users/<USER>/Library/Android/sdk
-# For Linux: sdk.dir=/home/<USER>/Android/Sdk
+# Android SDK Location & Secrets Template
+# Rename or copy to local.properties
 sdk.dir=C\:\\Users\\<USER>\\AppData\\Local\\Android\\Sdk
-
-# Victor Noctis Supabase Credentials
-SUPABASE_URL=https://seaicpwexrhauggyvsjl.supabase.co
+SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key_here
-
-# Victor Web API Endpoint (Android Emulator uses 10.0.2.2 for localhost)
 VIC_WEB_API_URL=http://10.0.2.2:3000

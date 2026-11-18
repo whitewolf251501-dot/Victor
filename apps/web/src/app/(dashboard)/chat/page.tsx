@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { WolfAvatar, type WolfState } from '@/components/victor/wolf-avatar';
+import { Wolf3DCompanion } from '@/components/victor/wolf-3d-companion';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useVoiceOutput } from '@/hooks/useVoiceOutput';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
 interface MessageItem {
   id: string;
@@ -29,6 +31,17 @@ export default function ChatPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showConvDrawer, setShowConvDrawer] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
+
+  const { isOnline, reconnected } = useNetworkStatus();
+
+  // Reflect offline network state on wolf companion
+  useEffect(() => {
+    if (!isOnline) {
+      setWolfState('offline');
+    } else {
+      setWolfState((prev) => (prev === 'offline' ? 'idle' : prev));
+    }
+  }, [isOnline]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -190,8 +203,8 @@ export default function ChatPage() {
     } else if (voiceState === 'error') {
       setWolfState('error');
       setTimeout(() => setWolfState('idle'), 3000);
-    } else if (wolfState !== 'success') {
-      setWolfState('idle');
+    } else {
+      setWolfState((prev) => (prev === 'success' ? prev : 'idle'));
     }
   }, [voiceState, ttsState, isLoading]);
 
@@ -207,25 +220,25 @@ export default function ChatPage() {
   }, [voiceError]);
 
   // Load conversations list
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
     try {
       const res = await fetch('/api/victor/conversations');
       if (res.ok) {
         const data = await res.json();
         const convList = data.conversations ?? [];
         setConversations(convList);
-        if (convList.length > 0 && !activeConversationId) {
-          setActiveConversationId(convList[0].id);
+        if (convList.length > 0) {
+          setActiveConversationId((prev) => prev ?? convList[0].id);
         }
       }
     } catch (err) {
       console.error('Failed to load conversations:', err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadConversations();
-  }, []);
+  }, [loadConversations]);
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -353,11 +366,25 @@ export default function ChatPage() {
           </div>
         </div>
 
+        {/* Network Continuity Banners */}
+        {!isOnline && (
+          <div className="bg-amber-950/70 border-b border-amber-800/80 text-amber-300 text-xs font-mono py-1.5 px-4 flex items-center justify-between animate-fade-in">
+            <span>Offline Mode: Connectivity lost. Live operations paused.</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/60 uppercase">Offline</span>
+          </div>
+        )}
+        {reconnected && (
+          <div className="bg-emerald-950/70 border-b border-emerald-800/80 text-emerald-300 text-xs font-mono py-1.5 px-4 flex items-center justify-between animate-fade-in">
+            <span>Reconnected to Victor Core. Session state preserved.</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/60 uppercase">Online</span>
+          </div>
+        )}
+
         {/* Message Stream */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-8 text-slate-500 font-mono">
-              <WolfAvatar state={wolfState} size="lg" className="mb-6 opacity-60" />
+              <Wolf3DCompanion state={wolfState} size="lg" className="mb-6 opacity-75" />
               <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-widest mb-1">
                 Victor Terminal Operational
               </h3>

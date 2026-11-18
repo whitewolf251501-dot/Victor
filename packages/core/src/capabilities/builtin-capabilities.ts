@@ -152,8 +152,35 @@ export const BUILTIN_CAPABILITIES: CapabilityDefinition[] = [
     status: 'available',
     category: 'communication',
   },
+  {
+    id: 'vic.terminal.execute' as CapabilityId,
+    name: 'Terminal Command Execution',
+    description: 'execute terminal command (requires confirmation)',
+    authorityLevel: 3,
+    target: 'device',
+    status: 'available',
+    category: 'system',
+  },
+  {
+    id: 'vic.system.reboot' as CapabilityId,
+    name: 'Reboot System',
+    description: 'reboot host system (requires confirmation)',
+    authorityLevel: 3,
+    target: 'device',
+    status: 'available',
+    category: 'system',
+  },
 
   // L4 — Restricted (never execute)
+  {
+    id: 'vic.system.wipe_audit_log' as CapabilityId,
+    name: 'Wipe Audit Log',
+    description: 'destructive deletion of audit trails (restricted)',
+    authorityLevel: 4,
+    target: 'service',
+    status: 'available',
+    category: 'system',
+  },
   {
     id: 'vic.system.admin' as CapabilityId,
     name: 'System Administration',

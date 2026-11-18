@@ -1,4 +1,4 @@
-import type { Brand } from './identity';
+import type { Brand, IdentityContext } from './identity';
 
 export type CapabilityId = Brand<string, 'CapabilityId'>;
 
@@ -11,6 +11,13 @@ export type CapabilityId = Brand<string, 'CapabilityId'>;
  * L4: Restricted - prohibited, deny always, never attempt
  */
 export type AuthorityLevel = 0 | 1 | 2 | 3 | 4;
+
+export type RiskClassification =
+  | 'read_only'
+  | 'reversible'
+  | 'consequential'
+  | 'sensitive'
+  | 'irreversible';
 
 export type ExecutionTarget = 'cloud' | 'service' | 'device';
 
@@ -36,6 +43,9 @@ export interface CapabilityDefinition {
   parametersSchema?: Record<string, unknown>;
   returnsSchema?: Record<string, unknown>;
   requiredPermissions?: string[];
+  requiredScopes?: string[];
+  riskClassification?: RiskClassification;
+  verificationRequired?: boolean;
   version?: string;
   tags?: string[];
   timeoutMs?: number;
@@ -48,6 +58,9 @@ export interface OperationRequest {
   ownerId: string;
   deviceId?: string;
   context?: Record<string, unknown>;
+  identityContext?: IdentityContext;
+  idempotencyKey?: string;
+  capabilityVersion?: string;
 }
 
 export interface AuthorizationResult {
@@ -56,4 +69,47 @@ export interface AuthorizationResult {
   requiresApproval: boolean;
   reason: string;
   approvalToken?: string;
+  payloadHash?: string;
+  riskClassification?: RiskClassification;
+  expiresAt?: string;
 }
+
+export type CapabilityHealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
+
+export interface CapabilityHealthCheckResult {
+  capabilityId: CapabilityId;
+  status: CapabilityHealthStatus;
+  latencyMs?: number;
+  error?: string;
+  checkedAt: string;
+}
+
+export interface NormalizedCapabilityResult<T = unknown> {
+  success: boolean;
+  state: 'succeeded' | 'failed' | 'denied' | 'timed_out' | 'approval_required';
+  capabilityId: CapabilityId;
+  version: string;
+  data?: T;
+  error?: string;
+  errorCode?: string;
+  executionTimeMs: number;
+  evidence?: {
+    verified: boolean;
+    verificationLevel: 'none' | 'structural' | 'deterministic' | 'external_receipt';
+    receipt?: Record<string, unknown>;
+    timestamp: string;
+    verifier: string;
+    notes?: string;
+  };
+}
+
+export interface CapabilityDiscoveryFilter {
+  status?: CapabilityStatus;
+  category?: string;
+  target?: ExecutionTarget;
+  authorityLevelMax?: AuthorityLevel;
+  scopes?: string[];
+  version?: string;
+  healthyOnly?: boolean;
+}
+

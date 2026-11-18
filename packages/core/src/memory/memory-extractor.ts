@@ -1,10 +1,12 @@
-import type { MemoryCategory, MemoryImportance } from '@victor/shared';
+import type { MemoryCategory, MemoryImportance, MemoryProvenance } from '@victor/shared';
+import { SecretSanitizer } from '../vte/secret-sanitizer';
 
 export interface MemoryCandidate {
   content: string;
   category: MemoryCategory;
   importance: MemoryImportance;
   confidence: number;
+  provenance: MemoryProvenance;
 }
 
 interface ExtractionRule {
@@ -12,7 +14,28 @@ interface ExtractionRule {
   category: MemoryCategory;
   importance: MemoryImportance;
   confidence: number;
+  provenance: MemoryProvenance;
   extractor: (match: RegExpExecArray) => string;
+}
+
+const SENSITIVE_PATTERNS = [
+  /\b(?:password|passwd|pwd)\b/i,
+  /\bapi[_-]?key\b/i,
+  /\bsecret\s*(?:token|key)?\b/i,
+  /\bbearer\s+[a-z0-9_\-\.]{10,}/i,
+  /\bsk-[a-z0-9]{15,}/i,
+  /\bAIza[0-9A-Za-z-_]{30,}/i,
+  /\b\d{3}-\d{2}-\d{4}\b/, // SSN
+  /\b(?:\d{4}[-\s]?){3}\d{4}\b/, // Credit Card
+];
+
+function containsSensitiveData(text: string): boolean {
+  for (const pattern of SENSITIVE_PATTERNS) {
+    if (pattern.test(text)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 const EXTRACTION_RULES: ExtractionRule[] = [
@@ -23,6 +46,7 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'fact',
     importance: 'high',
     confidence: 0.95,
+    provenance: 'user_stated',
     extractor: (m) => `Owner's name is ${m[1].trim()}`,
   },
   {
@@ -31,6 +55,7 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'fact',
     importance: 'medium',
     confidence: 0.8,
+    provenance: 'inferred',
     extractor: (m) => `Owner is a ${m[1].trim()}`,
   },
   {
@@ -39,6 +64,7 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'fact',
     importance: 'high',
     confidence: 0.88,
+    provenance: 'inferred',
     extractor: (m) => `Owner lives in ${m[1].trim()}`,
   },
 
@@ -49,6 +75,7 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'preference',
     importance: 'medium',
     confidence: 0.85,
+    provenance: 'inferred',
     extractor: (m) => `Prefers ${m[1].trim()}`,
   },
   {
@@ -57,6 +84,7 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'preference',
     importance: 'medium',
     confidence: 0.75,
+    provenance: 'inferred',
     extractor: (m) => `Likes ${m[1].trim()}`,
   },
   {
@@ -65,6 +93,7 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'preference',
     importance: 'medium',
     confidence: 0.85,
+    provenance: 'user_stated',
     extractor: (m) => `Favorite ${m[1].trim()} is ${m[2].trim()}`,
   },
 
@@ -75,6 +104,7 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'goal',
     importance: 'medium',
     confidence: 0.85,
+    provenance: 'user_stated',
     extractor: (m) => `Goal: ${m[1].trim()}`,
   },
   {
@@ -83,6 +113,7 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'goal',
     importance: 'medium',
     confidence: 0.75,
+    provenance: 'inferred',
     extractor: (m) => `Wants to ${m[1].trim()}`,
   },
 
@@ -93,16 +124,18 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'decision',
     importance: 'high',
     confidence: 0.9,
+    provenance: 'user_stated',
     extractor: (m) => `Decided to ${m[1].trim()}`,
   },
 
-  // 5. Instructions
+  // 5. Instructions & Direct User Statements
   {
     // "remind me to inspect the server"
     pattern: /\bremind\s+me(?:\s+to)?\s+(.+?)(?:[.!?]+(?:\s+|$)|$)/i,
     category: 'instruction',
     importance: 'high',
     confidence: 0.95,
+    provenance: 'user_stated',
     extractor: (m) => `Reminder: ${m[1].trim()}`,
   },
   {
@@ -111,6 +144,7 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'instruction',
     importance: 'high',
     confidence: 0.95,
+    provenance: 'user_stated',
     extractor: (m) => m[1].trim(),
   },
 
@@ -121,12 +155,14 @@ const EXTRACTION_RULES: ExtractionRule[] = [
     category: 'project',
     importance: 'medium',
     confidence: 0.85,
+    provenance: 'inferred',
     extractor: (m) => `Working on ${m[1].trim()}`,
   },
 ];
 
 /**
  * Extracts candidate memories from a user message and assistant response turn.
+ * Sensitive credentials (passwords, auth tokens, secret keys) are strictly rejected.
  * Only returns candidates with confidence > 0.7.
  */
 export function extractMemoriesFromMessage(
@@ -142,6 +178,11 @@ export function extractMemoriesFromMessage(
     return [];
   }
 
+  // Reject auto-extraction if the source message contains explicit sensitive credentials
+  if (containsSensitiveData(trimmed)) {
+    return [];
+  }
+
   const candidates: MemoryCandidate[] = [];
   const seenContent = new Set<string>();
 
@@ -150,6 +191,11 @@ export function extractMemoriesFromMessage(
     if (match) {
       const extractedContent = rule.extractor(match).trim();
       const cleaned = extractedContent.replace(/[.,;:!?]+$/, '').trim();
+
+      // Check extracted content for sensitive data
+      if (containsSensitiveData(cleaned)) {
+        continue;
+      }
 
       if (cleaned.length >= 3 && rule.confidence > 0.7) {
         const lowerKey = `${rule.category}:${cleaned.toLowerCase()}`;
@@ -160,6 +206,7 @@ export function extractMemoriesFromMessage(
             category: rule.category,
             importance: rule.importance,
             confidence: rule.confidence,
+            provenance: rule.provenance,
           });
         }
       }

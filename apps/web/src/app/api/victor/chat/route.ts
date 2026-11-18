@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
   GeminiProvider,
+  OpenAICompatibleProvider,
+  DeterministicProvider,
+  ModelRouter,
   buildSystemPrompt,
   retrieveRelevantMemories,
   formatMemoriesForPrompt,
@@ -14,7 +17,7 @@ import {
   AuthorityEngine,
   executeWebSearch,
 } from '@victor/core';
-import type { Message, MessageId, DeviceId } from '@victor/shared';
+import type { Message, MessageId, DeviceId, IdentityContext, OwnerId, ExecutionId, CapabilityId } from '@victor/shared';
 
 export interface ChatRequestBody {
   message?: string;
@@ -255,6 +258,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const identityContext: IdentityContext = {
+      ownerId: user.id as OwnerId,
+      deviceId: resolvedDeviceId ? (resolvedDeviceId as DeviceId) : undefined,
+      actorType: 'owner',
+      scopes: ['*'],
+      roles: ['owner'],
+      authMethod: 'session_jwt',
+      correlationId: crypto.randomUUID(),
+      issuedAt: new Date().toISOString(),
+    };
+
     // 3. Resolve conversation & retrieve last 20 messages
     const conversation = await getOrCreateConversation(
       supabase,
@@ -290,7 +304,11 @@ export async function POST(request: NextRequest) {
         const actionName = cap?.name ?? pending.capability_id;
 
         if (isConfirmation) {
-          const confirmed = await authorityEngine.confirmApproval(pending.token, user.id);
+          const confirmed = await authorityEngine.confirmApproval(
+            pending.token,
+            user.id,
+            pending.params
+          );
           if (confirmed) {
             victorResponse = `Action confirmed: ${actionName}. Result: The operation has been authorized and dispatched.`;
           } else {
@@ -379,6 +397,7 @@ export async function POST(request: NextRequest) {
             params: actionIntent.params,
             ownerId: user.id,
             deviceId: resolvedDeviceId ?? undefined,
+            identityContext,
           });
 
           if (!authResult.authorized && authResult.requiresApproval) {
@@ -389,19 +408,47 @@ export async function POST(request: NextRequest) {
             // L4 or unavailable/restricted
             victorResponse = `Action attempted: ${actionIntent.actionName}. I can't do that — it's outside what I'm authorized to do.`;
           } else {
-            // L0 - L2: Authorized, execute immediately
+            // L0 - L2: Authorized, execute through VTE execution pipeline
             if (actionIntent.capabilityId === 'vic.web.search') {
               const query = (actionIntent.params.query as string) || message;
-              const searchResult = await executeWebSearch(query);
+              const execResult = await authorityEngine.executeEnvelope(
+                {
+                  executionId: crypto.randomUUID() as ExecutionId,
+                  identityContext,
+                  capabilityId: actionIntent.capabilityId as CapabilityId,
+                  params: actionIntent.params,
+                  payloadHash: authResult.payloadHash ?? '',
+                  riskClassification: authResult.riskClassification ?? 'reversible',
+                  authorityLevel: authResult.level,
+                  createdAt: new Date().toISOString(),
+                },
+                async () => {
+                  const searchResult = await executeWebSearch(query);
+                  return {
+                    data: searchResult,
+                    evidence: {
+                      verified: true,
+                      verificationLevel: 'deterministic',
+                      timestamp: new Date().toISOString(),
+                      verifier: 'web-search-adapter',
+                    },
+                  };
+                }
+              );
 
-              if (searchResult.results.length > 0) {
-                const formatted = searchResult.results
-                  .slice(0, 5)
-                  .map((r, i) => `${i + 1}. **${r.title}**\n   ${r.snippet}\n   ${r.url}`)
-                  .join('\n\n');
-                victorResponse = `Action attempted: Web Search for "${query}". Result: Found ${searchResult.results.length} real-time results (${searchResult.source}):\n\n${formatted}`;
+              if (execResult.state === 'succeeded' && execResult.data) {
+                const searchData = execResult.data as { results: any[]; source: string };
+                if (searchData.results.length > 0) {
+                  const formatted = searchData.results
+                    .slice(0, 5)
+                    .map((r: any, i: number) => `${i + 1}. **${r.title}**\n   ${r.snippet}\n   ${r.url}`)
+                    .join('\n\n');
+                  victorResponse = `Action attempted: Web Search for "${query}". Result: Found ${searchData.results.length} real-time results (${searchData.source}):\n\n${formatted}`;
+                } else {
+                  victorResponse = `Action attempted: Web Search for "${query}". Result: Search completed via ${searchData.source}, but no relevant results were found.`;
+                }
               } else {
-                victorResponse = `Action attempted: Web Search for "${query}". Result: Search completed via ${searchResult.source}, but no relevant results were found.`;
+                victorResponse = `Action execution failed: ${execResult.error || 'Unknown error'}`;
               }
             } else {
               victorResponse = `Action attempted: ${actionIntent.actionName}. Result: Operation authorized (Level ${authResult.level}) and completed.`;
@@ -436,9 +483,14 @@ export async function POST(request: NextRequest) {
           ];
 
           const gemini = new GeminiProvider();
+          const fallbackProvider = process.env.OPENAI_API_KEY
+            ? new OpenAICompatibleProvider()
+            : new DeterministicProvider({ defaultResponse: 'Tactical link established. Victor Noctis standing by.' });
+          const modelRouter = new ModelRouter({ primary: gemini, fallback: fallbackProvider, timeoutMs: 15000 });
 
           try {
-            const rawModelResponse = await gemini.generateResponse(historyWithCurrent, systemPrompt);
+            const routed = await modelRouter.generateResponse(historyWithCurrent, systemPrompt);
+            const rawModelResponse = routed.content;
 
             // Also inspect model's planned response for action intent
             const modelActionIntent = detectActionIntent(rawModelResponse);
@@ -547,7 +599,12 @@ export async function POST(request: NextRequest) {
                   candidate.content,
                   candidate.category,
                   candidate.importance,
-                  'auto_extracted'
+                  {
+                    source: 'auto_extracted',
+                    provenance: candidate.provenance,
+                    confidence: candidate.confidence,
+                    sourceRef: conversation.id,
+                  }
                 );
               }
             }

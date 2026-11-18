@@ -4,11 +4,15 @@ import {
   type MemoryId,
   type MemoryCategory,
   type MemoryImportance,
+  type MemoryProvenance,
   type OwnerId,
+  type RetentionPolicy,
   MEMORY_CATEGORIES,
   MEMORY_IMPORTANCES,
+  MEMORY_PROVENANCES,
 } from '@victor/shared';
 import { retrieveRelevantMemories } from './memory-retriever';
+import { SecretSanitizer } from '../vte/secret-sanitizer';
 
 export interface RetrieveOptions {
   limit?: number;
@@ -16,11 +20,24 @@ export interface RetrieveOptions {
   minImportance?: MemoryImportance;
 }
 
+export interface MemorySaveOptions {
+  provenance?: MemoryProvenance;
+  confidence?: number;
+  source?: string;
+  sourceRef?: string;
+  embeddingModel?: string;
+  embeddingVersion?: string;
+}
+
 export interface MemoryChanges {
   content?: string;
   category?: MemoryCategory;
   importance?: MemoryImportance;
+  confidence?: number;
 }
+
+const MEMORY_SELECT_FIELDS =
+  'id, owner_id, category, content, importance, provenance, confidence, source, source_ref, embedding_model, embedding_version, created_at, updated_at';
 
 export class MemoryManager {
   constructor(
@@ -42,20 +59,25 @@ export class MemoryManager {
       category: row.category as MemoryCategory,
       content: row.content,
       importance: row.importance as MemoryImportance,
+      provenance: (row.provenance ?? 'user_stated') as MemoryProvenance,
+      confidence: typeof row.confidence === 'number' ? row.confidence : 1.0,
+      source: row.source ?? 'interaction',
+      sourceRef: row.source_ref ?? undefined,
+      embeddingModel: row.embedding_model ?? undefined,
+      embeddingVersion: row.embedding_version ?? undefined,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      source: row.source ?? 'interaction',
     };
   }
 
   /**
-   * Saves a new memory for the owner.
+   * Saves a new memory for the owner, enforcing secret scrubbing and provenance tracking.
    */
   async save(
     content: string,
     category: MemoryCategory,
     importance: MemoryImportance = 'medium',
-    source: string = 'system'
+    optionsOrSource: string | MemorySaveOptions = 'system'
   ): Promise<Memory> {
     const trimmed = content?.trim();
     if (!trimmed) {
@@ -74,16 +96,39 @@ export class MemoryManager {
       );
     }
 
+    const options: MemorySaveOptions =
+      typeof optionsOrSource === 'string'
+        ? { source: optionsOrSource }
+        : optionsOrSource;
+
+    const source = options.source || 'system';
+    const provenance = options.provenance || 'user_stated';
+    const confidence = options.confidence !== undefined ? options.confidence : 1.0;
+
+    if (!MEMORY_PROVENANCES.includes(provenance)) {
+      throw new Error(
+        `Invalid provenance '${provenance}'. Allowed values: ${MEMORY_PROVENANCES.join(', ')}`
+      );
+    }
+
+    // Sanitize any potential bearer tokens, secret patterns, or credentials
+    const sanitizedContent = SecretSanitizer.sanitizeString(trimmed);
+
     const { data, error } = await this.supabase
       .from('memories')
       .insert({
         owner_id: this.ownerId,
-        content: trimmed,
+        content: sanitizedContent,
         category,
         importance,
-        source: source || 'system',
+        provenance,
+        confidence,
+        source,
+        source_ref: options.sourceRef ?? null,
+        embedding_model: options.embeddingModel ?? null,
+        embedding_version: options.embeddingVersion ?? null,
       })
-      .select('id, owner_id, category, content, importance, created_at, updated_at, source')
+      .select(MEMORY_SELECT_FIELDS)
       .single();
 
     if (error || !data) {
@@ -134,7 +179,7 @@ export class MemoryManager {
     try {
       const { data, error } = await this.supabase
         .from('memories')
-        .select('id, owner_id, category, content, importance, created_at, updated_at, source')
+        .select(MEMORY_SELECT_FIELDS)
         .eq('id', id)
         .eq('owner_id', this.ownerId)
         .maybeSingle();
@@ -166,7 +211,7 @@ export class MemoryManager {
       if (!trimmed) {
         throw new Error('Memory content cannot be empty.');
       }
-      updatePayload.content = trimmed;
+      updatePayload.content = SecretSanitizer.sanitizeString(trimmed);
     }
 
     if (changes.category !== undefined) {
@@ -183,12 +228,16 @@ export class MemoryManager {
       updatePayload.importance = changes.importance;
     }
 
+    if (changes.confidence !== undefined) {
+      updatePayload.confidence = Math.max(0, Math.min(1, changes.confidence));
+    }
+
     const { data, error } = await this.supabase
       .from('memories')
       .update(updatePayload)
       .eq('id', id)
       .eq('owner_id', this.ownerId)
-      .select('id, owner_id, category, content, importance, created_at, updated_at, source')
+      .select(MEMORY_SELECT_FIELDS)
       .single();
 
     if (error || !data) {
@@ -245,7 +294,7 @@ export class MemoryManager {
     try {
       const { data, error } = await this.supabase
         .from('memories')
-        .select('id, owner_id, category, content, importance, created_at, updated_at, source')
+        .select(MEMORY_SELECT_FIELDS)
         .eq('owner_id', this.ownerId)
         .eq('category', category)
         .order('created_at', { ascending: false });
@@ -267,7 +316,7 @@ export class MemoryManager {
     try {
       const { data, error } = await this.supabase
         .from('memories')
-        .select('id, owner_id, category, content, importance, created_at, updated_at, source')
+        .select(MEMORY_SELECT_FIELDS)
         .eq('owner_id', this.ownerId)
         .order('created_at', { ascending: false })
         .limit(limit);
@@ -302,7 +351,6 @@ export class MemoryManager {
         return false;
       }
 
-      // Check for exact lowercase match or high containment
       for (const row of data) {
         const existing = (row.content as string).toLowerCase().trim();
         if (existing === trimmed) {
@@ -319,5 +367,45 @@ export class MemoryManager {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Exports all owner memories formatted as JSON or JSONL lines.
+   */
+  async exportMemories(format: 'json' | 'jsonl' = 'jsonl'): Promise<string> {
+    const allMemories = await this.getRecent(1000);
+    if (format === 'json') {
+      return JSON.stringify(allMemories, null, 2);
+    }
+    return allMemories.map((m) => JSON.stringify(m)).join('\n');
+  }
+
+  /**
+   * Prunes memories based on retention policy (maxAgeDays, excluding critical importances).
+   */
+  async pruneExpiredMemories(policy: RetentionPolicy): Promise<number> {
+    const maxAgeDays = policy.maxAgeDays ?? 365;
+    const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
+
+    let query = this.supabase
+      .from('memories')
+      .delete({ count: 'exact' })
+      .eq('owner_id', this.ownerId)
+      .lt('created_at', cutoffDate);
+
+    if (policy.excludeImportances && policy.excludeImportances.length > 0) {
+      query = query.not('importance', 'in', `(${policy.excludeImportances.join(',')})`);
+    }
+
+    if (policy.excludeCategories && policy.excludeCategories.length > 0) {
+      query = query.not('category', 'in', `(${policy.excludeCategories.join(',')})`);
+    }
+
+    const { count, error } = await query;
+    if (error) {
+      throw new Error(`Failed to prune expired memories: ${error.message}`);
+    }
+
+    return count ?? 0;
   }
 }

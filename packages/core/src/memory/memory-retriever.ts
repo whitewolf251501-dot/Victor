@@ -64,7 +64,7 @@ export async function retrieveRelevantMemories(
   try {
     const { data, error } = await supabase
       .from('memories')
-      .select('id, owner_id, category, content, importance, created_at, updated_at, source')
+      .select('id, owner_id, category, content, importance, provenance, confidence, source, source_ref, embedding_model, embedding_version, created_at, updated_at')
       .eq('owner_id', ownerId);
 
     if (error || !data) {
@@ -80,9 +80,14 @@ export async function retrieveRelevantMemories(
         category: item.category,
         content: item.content,
         importance: item.importance,
+        provenance: item.provenance ?? 'user_stated',
+        confidence: typeof item.confidence === 'number' ? item.confidence : 1.0,
+        source: item.source ?? 'interaction',
+        sourceRef: item.source_ref ?? undefined,
+        embeddingModel: item.embedding_model ?? undefined,
+        embeddingVersion: item.embedding_version ?? undefined,
         createdAt: item.created_at,
         updatedAt: item.updated_at,
-        source: item.source ?? 'interaction',
       };
 
       const keywordScore = calculateKeywordScore(queryTokens, memory.content);
